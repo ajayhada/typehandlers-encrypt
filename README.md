@@ -5,21 +5,20 @@
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.github.drtrang/typehandlers-encrypt/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.github.drtrang/typehandlers-encrypt)
 [![License](http://img.shields.io/badge/license-apache%202-brightgreen.svg)](https://github.com/drtrang/typehandlers-encrypt/blob/master/LICENSE)
 
-## 介绍
-应公司安全部门要求，需要对数据库中的敏感信息做加密处理。由于此次需求涉及的字段较多，手动加解密颇为不便且改动较大，一个更加简单、通用的解决方案势在必行。
+## Introduction
+At the request of the company's security department, sensitive information in the database needs to be encrypted. Due to the large number of fields involved in this demand, manual encryption and decryption is quite inconvenient and the changes are large. A simpler and more versatile solution is imperative.
 
-`typehandlers-encrypt` 项目在这种背景下诞生，用户使用时无需更改业务代码，仅需少量配置即可实现数据库指定字段的加解密操作，大大减小了对用户的影响。
-
-
-## 实现原理
-
-`typehandlers-encrypt` 基于 MyBatis 的 TypeHandler 开发，通过 TypeHandler 可以在 JavaType 和 JdbcType 中互相转换的特性，拦截 JavaType 为 `com.github.trang.typehandlers.alias.Encrypt` 的 SQL，在预处理语句（PreparedStatement）中设置参数时自动加密，并在结果集（ResultSet）中取值时自动解密。
-
-注：由于依赖 MyBatis，使用时需要将 `EncryptTypeHandler` 和 `Encrypt` 注册到 MyBatis，否则无法生效，注册方式见 **声明 EncryptTypeHandler**。
+The `typehandlers-encrypt`project was born in this context. Users do not need to change the business code when using it. Only a small amount of configuration can be used to encrypt and decrypt the specified fields of the database, greatly reducing the impact on users.
 
 
-## 应用
-### 依赖
+## Principle of implementation
+
+Typehandlers-encrypt Based on MyBatis's TypeHandler development, the property that can be converted between JavaType and JdbcType by TypeHandler intercepts SQL with JavaType com.github.trang.typehandlers.alias.Encrypt, when setting parameters in prepared statement (PreparedStatement) Automatically encrypts and automatically decrypts when the value is in the result set (ResultSet).
+
+Note: Because it depends on MyBatis, you need to register EncryptTypeHandler and Encrypt to MyBatis, otherwise it will not take effect. For the registration method, please declare EncryptTypeHandler.
+
+## application
+### POM
 ```xml
 <dependency>
     <groupId>com.github.drtrang</groupId>
@@ -28,8 +27,8 @@
 </dependency>
 ```
 
-### 声明 EncryptTypeHandler
-#### 1. 单独使用 MyBatis
+### Declare EncryptTypeHandler
+#### 1. Use MyBatis alone
 ```xml
 <!-- mybatis-config.xml -->
 <typeAliases>
@@ -41,7 +40,7 @@
 </typeHandlers>
 ```
 
-#### 2. 与 Spring 结合
+#### 2. Combine with Spring
 ```java
 @Bean
 public SqlSessionFactory sqlSessionFactory(Configuration config) {
@@ -52,7 +51,7 @@ public SqlSessionFactory sqlSessionFactory(Configuration config) {
 }
 ```
 
-#### 3. 与 SpringBoot 结合
+#### 3. Combine with SpringBoot
 ```yaml
 ##application.yml
 mybatis:
@@ -60,70 +59,74 @@ mybatis:
     type-handlers-package: com.github.trang.typehandlers.type
 ```
 
-注：以上配置方式**任选其一**即可，请根据实际情况选择。
+Note: You can choose one of the above configuration methods, please choose according to the actual situation.
 
-### 使用 EncryptTypeHandler
+### Use EncryptTypeHandler
+
+
+declare `javaType="encrypt"` on the field that needs to be encrypted in SQL
+
 ```xml
-<!-- select： 在 resultMap 或 SQL 中需要加密的字段上声明 `javaType="encrypt"` -->
+<!-- declare `javaType="encrypt"` on the field that needs to be encrypted in resultMap or SQL -->
 <resultMap id="BaseResultMap" type="user">
     <id column="id" property="id" jdbcType="BIGINT" />
     <result column="username" javaType="string" jdbcType="VARCHAR" property="username" />
     <result column="password" javaType="encrypt" jdbcType="VARCHAR" property="password" />
 </resultMap>
 
-<!-- insert： 在 SQL 中需要加密的字段上声明 `javaType="encrypt"` -->
+<!-- Declare `javaType="encrypt"` on the field that needs to be encrypted in SQL -->
 <insert id="insert" parameterType="user">
     insert into user (id, username, password)
     values (#{id,jdbcType=BIGINT}, #{username,jdbcType=VARCHAR}, #{password, javaType=encrypt, jdbcType=VARCHAR})
 </insert>
 
-<!-- update： 在 SQL 中需要加密的字段上声明 `javaType="encrypt"` -->
+<1-- declare `javaType="encrypt"` on the field that needs to be encrypted in SQL -->
 <update id="update" parameterType="user">
     update user set password=#{password, javaType=encrypt, jdbcType=VARCHAR} where id=#{id}
 </update>
 ```
 
 
-## 进阶
-`typehandlers-encrypt` 内置了 AES 加密算法与默认的 16 位密钥，支持**开箱即用**，但用户也可以自定义加密算法和密钥，只需要在配置文件中声明对应的配置即可。需要注意，**两者同时配置时，要声明在同一文件里**。
+## Advanced
+Typehandlers-encrypt has built-in AES encryption algorithm and default 16-bit key, which is available out of the box, but users can also customize the encryption algorithm and key, just need to declare the corresponding configuration in the configuration file. It should be noted that when both are configured, they must be declared in the same file.
 
-配置示例：
+Configuration example:
+
 ```properties
 encrypt.private.key=xxx
 encrypt.class.name=com.github.trang.typehandlers.crypt.SimpleEncrypt
 ```
 
-### 配置文件查找
-方式一：项目启动时，会在项目的 Classpath 中依次查找名称为 `encrypt`、`properties/config-common`、`properties/config`、`config`、`application` 的 Properties 文件，直到文件存在且文件中包含名称为 `encrypt.private.key` 的属性时停止。
+### Profile lookup
+Method 1: When the project starts, it will search for the Properties file named encrypt, properties/config-common, properties/config, config, and application in the classpath of the project until the file exists and the file contains the name encrypt.private.key. The properties are stopped.
 
-方式二：如果项目中不存在以上文件，且不想单独新增，也可以在项目启动时调用 `ConfigUtil.bundleNames("xxx")` 来指定要读取的文件，这时只会从用户给定的文件中查找。
+Method 2: If the above file does not exist in the project and you do not want to add it separately, you can also call ConfigUtil.bundleNames("xxx") to specify the file to be read when the project starts. Only the file given by the user will be used. Find in.
 
-**当没有查找到相应配置时，项目会使用内置的默认配置。**
+**When the corresponding configuration is not found, the project uses the built-in default configuration.**
 
-### 自定义密钥
-`typehandlers-encrypt` 支持自定义密钥，只需在配置文件中声明即可。
+### Custom key
+Typehandlers-encrypt supports custom keys, just declare them in the configuration file.
 ```properties
 encrypt.private.key=xxx
 ```
 
-### 自定义加密算法
-`typehandlers-encrypt` 默认的加密算法是 **AES 对称加密**，如果默认算法不满足实际需求，用户可以自己实现 `com.github.trang.typehandlers.crypt.Crypt` 接口，并在配置文件中声明实现类的全路径。
+### Custom encryption algorithm
+Typehandlers-encrypt The default encryption algorithm is AES symmetric encryption. If the default algorithm does not meet the actual requirements, the user can implement the com.github.trang.typehandlers.crypt.Crypt interface and declare the full path of the implementation class in the configuration file.
 ```properties
 encrypt.class.name=com.github.trang.typehandlers.crypt.SimpleEncrypt
 ```
 
+Hard and wide
+The project is currently open source and uploaded to Github. If you are interested, you can read the source code. There is a demo Demo demo typelerlers-encrypt-demo in Github, including the complete use of typehandlers-encrypt, which can be used as a reference.
 
-## 硬广
-目前项目已开源，并上传到 [Github](https://github.com/drtrang/typehandlers-encrypt)，大家感兴趣的话可以阅读源码。[Github](https://github.com/drtrang/typehandlers-encrypt) 中有配套的 Demo 演示 [`typehandlers-encrypt-demo`](https://github.com/drtrang/typehandlers-encrypt-demo)，其中包括 `typehandlers-encrypt` 完整的使用方式，可以作为参考。
+If you have any questions, you can mention ISSUE on Github, or QQ. The following are the contact methods:
+My Github home page: https://github.com/drtrang
+Github address for this project: https://github.com/drtrang/typehandlers-encrypt
+Github address for Demo: https://github.com/drtrang/typehandlers-encrypt-demo
+BeanCopier tool: https://github.com/drtrang/Copiers
+QQ: 349096849
 
-如果有问题，可以在 Github 上提 ISSUE，或者 QQ 交流，以下是联系方式：<br>
-我的 Github 主页：https://github.com/drtrang<br>
-该项目的 Github 地址：https://github.com/drtrang/typehandlers-encrypt<br>
-配套 Demo 的 Github 地址：https://github.com/drtrang/typehandlers-encrypt-demo<br>
-BeanCopier 工具：https://github.com/drtrang/Copiers<br>
-QQ：349096849
+note:
 
-
-> **注意：**
-> 1. 目前 `EncryptTypeHandler` 只支持 JavaType 为 **String** 的情形，如有其它需求，请及时联系我。
-> 2. 加密时字段只过滤 **null 值**，非 null 的字段不做任何处理直接加密。
+Currently EncryptTypeHandler only supports JavaType as String. If you have other requirements, please contact me.
+When encrypting, the field only filters out null values, and non-null fields are directly encrypted without any processing.
